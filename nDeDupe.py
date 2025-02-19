@@ -68,19 +68,23 @@ class NessusMerger:
                 self.logger.warning(f"Host found without IP in {file_path}")
                 continue
 
-            # Process vulnerabilities
+            # Process vulnerabilities - preserve all attributes and child elements
             vulnerabilities = []
             for item in report_host.findall("ReportItem"):
+                # Store all original attributes
                 vuln = {
-                    'plugin_id': item.attrib.get('pluginID'),
-                    'port': item.attrib.get('port'),
-                    'protocol': item.attrib.get('protocol'),
-                    'severity': item.attrib.get('severity'),
-                    'plugin_name': item.attrib.get('pluginName'),
-                    'description': self._get_text(item.find('description')),
-                    'solution': self._get_text(item.find('solution')),
-                    'output': self._get_text(item.find('plugin_output'))
+                    'attributes': dict(item.attrib),
+                    'children': []
                 }
+                
+                # Store all child elements with their text
+                for child in item:
+                    vuln['children'].append({
+                        'tag': child.tag,
+                        'text': child.text,
+                        'attributes': dict(child.attrib)
+                    })
+                    
                 vulnerabilities.append(vuln)
 
             # Check for FQDN mismatches
@@ -108,13 +112,26 @@ class NessusMerger:
             if key not in existing_vulns:
                 self.hosts[ip].vulnerabilities.append(vuln)
             else:
-                # Update if new output is available
-                if vuln['output'] and not existing_vulns[key]['output']:
-                    existing_vulns[key]['output'] = vuln['output']
+                # Keep most complete data
+                for child in vuln['children']:
+                    # Find if this child exists in the existing vulnerability
+                    exists = False
+                    for existing_child in existing_vulns[key]['children']:
+                        if existing_child['tag'] == child['tag']:
+                            exists = True
+                            # Update if existing text is empty
+                            if not existing_child['text'] and child['text']:
+                                existing_child['text'] = child['text']
+                            break
+                    
+                    # Add child if it doesn't exist in the current vulnerability
+                    if not exists:
+                        existing_vulns[key]['children'].append(child)
 
     def _vuln_key(self, vuln: dict) -> str:
         """Create a unique key for a vulnerability."""
-        return f"{vuln['plugin_id']}_{vuln['port']}_{vuln['protocol']}"
+        attrs = vuln['attributes']
+        return f"{attrs.get('pluginID')}_{attrs.get('port')}_{attrs.get('protocol')}"
 
     def export_results(self, output_file: str) -> None:
         """Export merged results to a new .nessus file."""
@@ -138,26 +155,15 @@ class NessusMerger:
                 fqdn_tag = ET.SubElement(host_properties, "tag", name="hostname")
                 fqdn_tag.text = host.fqdn
             
-            # Add vulnerabilities
+            # Add vulnerabilities - preserve all original attributes and structure
             for vuln in host.vulnerabilities:
-                report_item = ET.SubElement(report_host, "ReportItem",
-                                          pluginID=vuln['plugin_id'],
-                                          port=vuln['port'],
-                                          protocol=vuln['protocol'],
-                                          severity=vuln['severity'],
-                                          pluginName=vuln['plugin_name'])
+                # Create ReportItem with all original attributes
+                report_item = ET.SubElement(report_host, "ReportItem", **vuln['attributes'])
                 
-                if vuln['description']:
-                    desc = ET.SubElement(report_item, "description")
-                    desc.text = vuln['description']
-                
-                if vuln['solution']:
-                    sol = ET.SubElement(report_item, "solution")
-                    sol.text = vuln['solution']
-                
-                if vuln['output']:
-                    output = ET.SubElement(report_item, "plugin_output")
-                    output.text = vuln['output']
+                # Add all child elements with their original structure
+                for child in vuln['children']:
+                    child_elem = ET.SubElement(report_item, child['tag'], **child['attributes'])
+                    child_elem.text = child['text']
 
         # Write to file with proper XML declaration and format
         tree = ET.ElementTree(root)

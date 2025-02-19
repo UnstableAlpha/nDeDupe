@@ -1,6 +1,7 @@
 # Nessus Scan Merger
 A Python utility designed to merge and deduplicate Tenable Nessus vulnerability scan results. Particularly useful for large infrastructure assessments where multiple scans are conducted across different time periods or network segments.
 
+
 ## Features
 - Merges multiple .nessus files into a single consolidated output
 - Deduplicates vulnerability findings
@@ -21,9 +22,9 @@ chmod +x nessus_merger.py
 ```
 
 ## Usage
-### Basic usage:
-``` bash
-python nessus_merger.py /path/to/nessus/files --output merged_results.nessus
+### Basic Usage:
+```bash
+python nDeDupe.py /path/to/nessus/files --output merged_results.nessus
 ```
 
 ## Output Files
