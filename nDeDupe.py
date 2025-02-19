@@ -118,8 +118,14 @@ class NessusMerger:
 
     def export_results(self, output_file: str) -> None:
         """Export merged results to a new .nessus file."""
+        # Create root element with proper format - NessusClientData_v2 (note the V is uppercase)
         root = ET.Element("NessusClientData_v2")
-        report = ET.SubElement(root, "Report")
+        # Add proper namespaces expected by Nessus 
+        root.set("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+        root.set("xmlns:nessus", "http://www.nessus.org/nessus_v2")
+        
+        # Create Report with proper name attribute
+        report = ET.SubElement(root, "Report", name="Merged Scan Results")
         
         for host in self.hosts.values():
             report_host = ET.SubElement(report, "ReportHost", name=host.ip)
@@ -153,9 +159,11 @@ class NessusMerger:
                     output = ET.SubElement(report_item, "plugin_output")
                     output.text = vuln['output']
 
-        # Write to file
+        # Write to file with proper XML declaration and format
         tree = ET.ElementTree(root)
-        tree.write(output_file, encoding='utf-8', xml_declaration=True)
+        with open(output_file, 'wb') as f:
+            f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
+            tree.write(f, encoding='utf-8', xml_declaration=False)
         self.logger.info(f"Results exported to {output_file}")
 
         # Export FQDN mismatches if any were found
